@@ -3,10 +3,10 @@
 #
 # Contract: https://github.com/lemonfiber/spec/blob/main/20-architecture/contracts/plugin-manifest.md
 #
-# `emby` is the upstream, Emby Server's official image, which Emby keeps closed. The
-# adapter that speaks the contracts in front of it is built from this repository, and
-# release.yml publishes it from every commit on main, tagged `main-<commit>`, and from
-# every train tag.
+# Two services. `emby` is the upstream, Emby Server's official image, which Emby keeps
+# closed. `emby-adapter` speaks the contracts in front of it. release.yml publishes it
+# from every commit on main, tagged `main-<commit>`, and from every train tag, and its
+# rolling pull requests move the digest and tag below to what was published.
 
 schema_version = 1
 
@@ -38,6 +38,23 @@ media_types = ["movies", "tv"]
 config_path = "/config"
 listens     = 8096
 user_mode   = { uid_env = "UID", gid_env = "GID" }
+native      = "emby"
+
+[[service]]
+id          = "emby-adapter"
+name        = "Emby adapter"
+image       = "ghcr.io/lemonfiber/emby-adapter"
+digest      = "sha256:f2203b00519e66188f17d125c6e7751bae8b97e7826f5ae6e39da40fce80ea78"
+tag         = "main-9f0b564e4d02"
+criticality = "important"
+reaches     = ""
+asks_for    = "Nothing beyond this machine. It answers lemonfiber's media.serve and identity.source contracts by calling Emby, beside it, with the administrator's account lemonfiber minted for it."
+config_path = "/config"
+listens     = 8080
+speaks      = ["media.serve@1", "identity.source@1"]
+fronts      = "emby"
+provides    = ["media.serve", "identity.source"]
+media_types = ["movies", "tv"]
 
 [[proof]]
 id      = "emby.identifies"

@@ -8,15 +8,16 @@ Without it, files on disk, no way to watch them.
 
 ## What it runs
 
-[`plugin.toml`](plugin.toml) declares `emby`, Emby Server itself:
-`docker.io/emby/embyserver`, `4.10.2.0`, by digest. It answers on port 8096 inside
-the stack's network. It publishes 8097 on this machine's loopback and nothing to
-the household, which reaches Emby through the stack's stream guard.
+Two services, declared in [`plugin.toml`](plugin.toml).
 
-The adapter, `ghcr.io/lemonfiber/emby-adapter`, is the Rust crate in this
-repository. It speaks lemonfiber's `media.serve@1` and `identity.source@1`
-contracts on port 8080 and asks `emby` for every answer. `release.yml` publishes
-it from every commit on `main`; the manifest does not declare it yet.
+| Service | Image | What it is |
+| --- | --- | --- |
+| `emby` | `docker.io/emby/embyserver`, `4.10.2.0`, by digest | Emby Server itself. It answers other services in its own API, which the manifest declares as `native = "emby"`, on port 8096 inside the stack's network. |
+| `emby-adapter` | `ghcr.io/lemonfiber/emby-adapter`, by digest | The adapter. It speaks lemonfiber's `media.serve@1` and `identity.source@1` contracts on port 8080 and asks `emby` for every answer. |
+
+Neither service publishes a port to the household. `emby` publishes 8097 on this
+machine's loopback, and lemonfiber reaches the adapter on the loopback at a port
+the engine assigns. The household reaches Emby through the stack's stream guard.
 
 Emby's image drops to the ids it reads from `UID` and `GID`, so it runs as the
 operator and its files share an owner with the adapter beside it.
@@ -77,6 +78,12 @@ lemonfiber plugin install ./plugin-emby
 
 ## What is proved here
 
+- **Conformance.** Every case of both contracts is recorded under
+  [`conformance/`](conformance), answered by this repository's adapter in front of
+  Emby at the pinned digest. `lemonfiber plugin conform` judges them without
+  running anything. `lemonfiber plugin record .` takes them, and the `recordings`
+  check takes them again on every pull request with the adapter built from the
+  tree and compares.
 - **Proofs.** Three `[[proof]]` entries in the manifest hold the pinned Emby to
   answering which server it is to anybody, and to refusing its account list and
   its catalogue to anybody who presents nothing. Their recordings are in

@@ -32,6 +32,10 @@ const REFUSED: [u16; 2] = [401, 403];
 
 const GONE: u16 = 404;
 
+const SECONDS_WRITTEN: usize = "2000-01-01T00:00:00".len();
+
+const UNSTOOD: &str = "whether the account still stands could not be read";
+
 #[derive(serde::Deserialize)]
 struct UserResource {
     #[serde(rename = "Id", default)]
@@ -46,6 +50,8 @@ struct UserResource {
     last_activity: Option<String>,
     #[serde(rename = "LastLoginDate", default)]
     last_login: Option<String>,
+    #[serde(rename = "DateCreated", default)]
+    created: Option<String>,
 }
 
 #[derive(serde::Deserialize, Default)]
@@ -308,10 +314,7 @@ async fn standing(emby: &Emby, signed: &Signed) -> Result<bool, Failure> {
     if REFUSED.contains(&response.status) {
         return Ok(false);
     }
-    let sessions: Vec<SessionResource> = emby.endpoint.decode(
-        &response,
-        "whether the account still stands could not be read",
-    )?;
+    let sessions: Vec<SessionResource> = emby.endpoint.decode(&response, UNSTOOD)?;
     if !sessions.iter().any(|session| session.user == signed.id) {
         return Ok(false);
     }
@@ -323,10 +326,7 @@ async fn standing(emby: &Emby, signed: &Signed) -> Result<bool, Failure> {
     if REFUSED.contains(&response.status) || response.status == GONE {
         return Ok(false);
     }
-    let held: UserResource = emby.endpoint.decode(
-        &response,
-        "whether the account still stands could not be read",
-    )?;
+    let held: UserResource = emby.endpoint.decode(&response, UNSTOOD)?;
     Ok(held.id == signed.id && held.stands())
 }
 
@@ -382,7 +382,20 @@ async fn claim(emby: &Emby, name: &str, password: &str, device: &str) -> Result<
     Ok(true)
 }
 
+fn to_the_second(moment: &str) -> &str {
+    moment.get(..SECONDS_WRITTEN).unwrap_or(moment)
+}
+
 async fn when_invited(emby: &Emby, since: &str) -> Result<Vec<Invited>, Failure> {
+    let response = emby.as_admin(Method::Get, "/Users", None).await?;
+    let held: Vec<UserResource> = emby
+        .endpoint
+        .decode(&response, "the household's accounts could not be read")?;
+    let mut latest: Vec<(String, String)> = held
+        .into_iter()
+        .filter_map(|user| Some((user.id, user.created?)))
+        .filter(|(id, created)| an_account(id) && to_the_second(created) >= to_the_second(since))
+        .collect();
     let asked = form_encoded(&[("MinDate", since), ("Limit", &AT_ONCE.to_string())]);
     let path = format!("/System/ActivityLog/Entries?{asked}");
     let response = emby.as_admin(Method::Get, &path, None).await?;
@@ -391,7 +404,6 @@ async fn when_invited(emby: &Emby, since: &str) -> Result<Vec<Invited>, Failure>
         "what the media server recorded could not be read",
     )?;
     let mut accounts: BTreeMap<String, Option<String>> = BTreeMap::new();
-    let mut invited = Vec::new();
     for entry in recorded.items {
         let Some(user) = entry
             .user
@@ -407,14 +419,19 @@ async fn when_invited(emby: &Emby, since: &str) -> Result<Vec<Invited>, Failure>
             accounts.insert(user, account.clone());
             account
         };
-        if let Some(member) = account {
-            invited.push(Invited {
-                member,
-                at: entry.date,
-            });
+        let Some(member) = account else {
+            continue;
+        };
+        match latest.iter_mut().find(|(id, _)| *id == member) {
+            Some((_, at)) if *at < entry.date => *at = entry.date,
+            Some(_) => {}
+            None => latest.push((member, entry.date)),
         }
     }
-    Ok(invited)
+    Ok(latest
+        .into_iter()
+        .map(|(member, at)| Invited { member, at })
+        .collect())
 }
 
 async fn held_as(emby: &Emby, internal: &str) -> Result<Option<String>, Failure> {
