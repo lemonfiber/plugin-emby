@@ -163,45 +163,66 @@ async fn an_account_that_is_no_id_is_refused_before_emby_is_asked() {
     assert!(fake.requests().is_empty());
 }
 
+const MADE: &str = r#"[
+    {"Id":"a7f3a7f3a7f3a7f3a7f3a7f3a7f3a7f3","DateCreated":"2026-08-01T00:00:00.0000000Z"},
+    {"Id":"4f53cda18c2baa0c0354bb5f9a3ecbe5","DateCreated":"2026-08-29T08:59:59.9000000Z"},
+    {"Id":"5f53cda18c2baa0c0354bb5f9a3ecbe5","DateCreated":"2026-07-01T00:00:00.0000000Z"},
+    {"Id":"6f53cda18c2baa0c0354bb5f9a3ecbe5"},
+    {"Id":"not-an-id","DateCreated":"2026-08-02T00:00:00.0000000Z"}
+]"#;
+
 #[tokio::test]
-async fn invitations_are_read_from_what_emby_recorded_naming_each_account_by_its_id() {
+async fn each_account_made_since_is_dated_by_the_latest_of_its_making_and_what_emby_recorded() {
     let recorded = r#"{"Items":[
-        {"Type":"user.created","Date":"2026-08-29T09:00:00Z","UserId":"2"},
-        {"Type":"user.passwordchanged","Date":"2026-08-30T09:00:00Z","UserId":"2"},
-        {"Type":"user.authenticated","Date":"2026-08-30T10:00:00Z","UserId":"2"},
-        {"Type":"user.created","Date":"2026-08-31T09:00:00Z","UserId":"3"},
-        {"Type":"user.created","Date":"2026-08-31T10:00:00Z","UserId":"9"},
-        {"Type":"user.created","Date":"2026-08-31T11:00:00Z"},
-        {"Type":"user.created","Date":"2026-08-31T12:00:00Z","UserId":"../2"}
+        {"Type":"user.passwordchanged","Date":"2026-08-30T09:00:00.0000000Z","UserId":"2"},
+        {"Type":"user.created","Date":"2026-08-29T09:00:00.0000000Z","UserId":"2"},
+        {"Type":"user.authenticated","Date":"2026-08-30T10:00:00.0000000Z","UserId":"2"},
+        {"Type":"user.passwordchanged","Date":"2026-07-31T00:00:00.0000000Z","UserId":"1"},
+        {"Type":"user.created","Date":"2026-08-31T09:00:00.0000000Z","UserId":"3"},
+        {"Type":"user.created","Date":"2026-08-31T10:00:00.0000000Z","UserId":"9"},
+        {"Type":"user.passwordchanged","Date":"2026-08-31T11:00:00.0000000Z","UserId":"4"},
+        {"Type":"user.created","Date":"2026-08-31T11:00:00.0000000Z"},
+        {"Type":"user.created","Date":"2026-08-31T12:00:00.0000000Z","UserId":"../2"}
     ]}"#;
     let fake = Fake::by_path(vec![
         ("/Users/AuthenticateByName", Answer::reply(200, SIGNED_IN)),
         ("/System/ActivityLog/Entries", Answer::reply(200, recorded)),
         (
+            "/Users/1",
+            Answer::reply(200, r#"{"Id":"a7f3a7f3a7f3a7f3a7f3a7f3a7f3a7f3"}"#),
+        ),
+        (
             "/Users/2",
             Answer::reply(200, r#"{"Id":"4f53cda18c2baa0c0354bb5f9a3ecbe5"}"#),
         ),
         ("/Users/3", Answer::reply(404, "")),
+        (
+            "/Users/4",
+            Answer::reply(200, r#"{"Id":"7f53cda18c2baa0c0354bb5f9a3ecbe5"}"#),
+        ),
         ("/Users/9", Answer::reply(200, r#"{"Id":"not-an-id"}"#)),
+        ("/Users", Answer::reply(200, MADE)),
     ]);
-    let invited = reader(&fake).when_invited("2000-01-01T00:00:00Z").await;
+    let invited = reader(&fake).when_invited("2026-08-01T00:00:00Z").await;
+    let at = |member: &str, at: &str| Invited {
+        member: member.to_owned(),
+        at: at.to_owned(),
+    };
     assert_eq!(
         invited.ok(),
         Some(vec![
-            Invited {
-                member: MEMBER.to_owned(),
-                at: "2026-08-29T09:00:00Z".to_owned()
-            },
-            Invited {
-                member: MEMBER.to_owned(),
-                at: "2026-08-30T09:00:00Z".to_owned()
-            },
+            at(ADMIN, "2026-08-01T00:00:00.0000000Z"),
+            at(MEMBER, "2026-08-30T09:00:00.0000000Z"),
+            at(
+                "7f53cda18c2baa0c0354bb5f9a3ecbe5",
+                "2026-08-31T11:00:00.0000000Z"
+            ),
         ])
     );
     let entries = asked(&fake, Method::Get, "Limit=200").map(|asked| asked.url);
     assert_eq!(
         entries,
-        Some("http://127.0.0.1:8096/System/ActivityLog/Entries?MinDate=2000-01-01T00%3A00%3A00Z&Limit=200".to_owned())
+        Some("http://127.0.0.1:8096/System/ActivityLog/Entries?MinDate=2026-08-01T00%3A00%3A00Z&Limit=200".to_owned())
     );
     assert_eq!(
         fake.requests()
@@ -224,6 +245,7 @@ async fn an_account_emby_recorded_and_cannot_name_fails_the_read() {
             ),
         ),
         ("/Users/2", Answer::reply(500, "")),
+        ("/Users", Answer::reply(200, "[]")),
     ]);
     assert!(reader(&fake).when_invited("since").await.is_err());
 }
@@ -524,13 +546,22 @@ async fn emby_signs_no_device_in_by_a_code_and_is_not_asked() {
 }
 
 #[tokio::test]
-async fn an_activity_log_emby_answers_unreadably_is_refused() {
-    let fake = Fake::in_turn(vec![
-        Answer::reply(200, SIGNED_IN),
-        Answer::reply(200, "not json"),
-    ]);
-    assert!(matches!(
-        reader(&fake).when_invited("since").await,
-        Err(Failure::Refused { .. })
-    ));
+async fn an_activity_log_or_a_household_emby_answers_unreadably_is_refused() {
+    for answers in [
+        vec![
+            Answer::reply(200, SIGNED_IN),
+            Answer::reply(200, "not json"),
+        ],
+        vec![
+            Answer::reply(200, SIGNED_IN),
+            Answer::reply(200, "[]"),
+            Answer::reply(200, "not json"),
+        ],
+    ] {
+        let fake = Fake::in_turn(answers);
+        assert!(matches!(
+            reader(&fake).when_invited("since").await,
+            Err(Failure::Refused { .. })
+        ));
+    }
 }

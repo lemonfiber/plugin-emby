@@ -17,6 +17,12 @@ commit `Cargo.toml` pins, into the image the `Dockerfile` builds. `release.yml`
 publishes that image from every commit on `main` and from the train's tag, and
 proposes its digest to `plugin.toml`.
 
+`conformance/` holds one recording per case of each contract the adapter speaks,
+written by `lemonfiber plugin record .`, at the commit `targets.toml` names,
+against a throwaway Emby at the digest `plugin.toml` pins and the adapter it
+pins; CI takes every recording again with the adapter built from this tree.
+Re-record whenever the adapter's answers or either digest change.
+`tests/conformance.rs` reads every recording with the core's own client, and
 `tests/manifest.rs` holds `plugin.toml` to the pinned core's own rules.
 
 `.github/reader/` is a byte-identical copy of plugin-template's harness. Change it
