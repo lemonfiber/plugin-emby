@@ -1,0 +1,7 @@
+.DS_Store
+.planning/
+__pycache__/
+*.py[cod]
+.lemonfiber/
+/target/
+lcov.info

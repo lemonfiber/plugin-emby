@@ -1,0 +1,22 @@
+# What this repository implements, one row per requirement (OPS-R74).
+#
+# `done` means the requirement is met in full by what is here, `partial` that this
+# repository holds its part and the rest lives elsewhere, `open` that nothing here
+# meets it yet. The release gate and the no-stubs gate read this file; a pull
+# request that changes whether a requirement is met changes its row.
+#
+# Writing the adapter's key and its upstream's credential, running it as the operator,
+# and running the substitute proof are the core's.
+
+requirement = [
+  { id = "ARCH-R206", state = "done", evidence = ["src/emby/declared.rs", "src/emby/members.rs", "tests/integration/emby/declaring.rs::the_declaration_is_one_a_guard_can_enforce", "tests/integration/emby/declaring/door.rs::a_guard_enforcing_the_declaration_passes_only_what_the_member_may_have"] },
+  { id = "ARCH-R346", state = "partial", evidence = ["src/emby/encrypting.rs", "tests/integration/emby/encrypting.rs::the_internal_tls_port_is_turned_on_with_the_certificate_and_in_force_once_emby_restarts"] },
+  { id = "ARCH-R372", state = "partial", evidence = ["plugin.toml"] },
+  { id = "F14-R6", state = "partial", evidence = ["src/adapter.rs", "src/adapter/tests.rs::it_speaks_both_contracts_and_names_the_release_its_recordings_were_taken_from"] },
+  { id = "F14-R14", state = "partial", evidence = ["plugin.toml", "src/adapter.rs"] },
+  { id = "F14-R15", state = "partial", evidence = ["Cargo.toml", "Dockerfile", ".github/workflows/release.yml"] },
+  { id = "F14-R26", state = "partial", evidence = ["src/emby/setup.rs", "tests/integration/emby/setting_up.rs::the_first_run_names_the_administrator_turns_port_mapping_off_and_hides_the_account"] },
+  { id = "F14-R27", state = "partial", evidence = ["Dockerfile", ".github/workflows/adapter.yml"] },
+  { id = "F14-R28", state = "partial", evidence = ["src/credential.rs", "src/credential/tests.rs::the_file_lemonfiber_wrote_is_read_as_the_credential"] },
+  { id = "F14-R30", state = "partial", evidence = ["src/emby/setup.rs", "tests/integration/emby/setting_up.rs::the_password_is_replaced_signed_in_with_the_one_in_force_and_proved_with_the_new_one"] },
+]

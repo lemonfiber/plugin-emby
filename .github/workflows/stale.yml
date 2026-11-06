@@ -1,0 +1,14 @@
+name: stale
+on:
+  schedule:
+    - cron: "58 1 * * *"
+permissions:
+  contents: read
+
+jobs:
+  stale:
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    uses: lemonfiber/spec/.github/workflows/stale.yml@679d0d4d8f7dd31771cd3d7333693069a27df7d1 # v1.0.138

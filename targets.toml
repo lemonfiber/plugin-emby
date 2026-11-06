@@ -1,0 +1,23 @@
+# The lemonfiber this plugin is validated and proved against (REPO-R56).
+#
+# It is deliberately not in `plugin.toml`, and could not be: `ARCH-R89` forbids a
+# manifest carrying a minimum lemonfiber version, because `F3-R21` requires an
+# unmet requirement to be refused by naming the capability that is missing rather
+# than a number that cannot say which one. What the manifest declares instead is
+# `[requires].capabilities`.
+#
+# This is a different fact, and a CI one: which lemonfiber this repository's
+# checks run against.
+#
+# It names a commit of lemonfiber's `main`, in full, rather than a release: what
+# the manifest declares — `speaks`, `fronts`, `native` and `replaces` — is on
+# `main` and in no release yet. `.github/reader/reader.py` refuses a commit
+# `main` does not hold, builds this one the way the release train builds the
+# build it is about to tag, keeps it in `.lemonfiber/`, and asks it about the
+# plugin, so every verdict CI reports is that build's own.
+#
+# The core crates in `Cargo.toml` are pinned at the same commit, so the adapter is
+# built against the core it is proved against, and `tests/targets.rs` fails where
+# the two disagree.
+
+commit = "abd7d75f6b2627327b6935f5322f696016413234"
