@@ -1,4 +1,4 @@
-#:schema https://raw.githubusercontent.com/lemonfiber/lemonfiber/abd7d75f6b2627327b6935f5322f696016413234/contract/plugin-manifest.schema.json
+#:schema https://raw.githubusercontent.com/lemonfiber/lemonfiber/80f16a17cd9a2985cf86dd98a4f01ca9f2138063/contract/plugin-manifest.schema.json
 # Emby, as a lemonfiber plugin.
 #
 # Contract: https://github.com/lemonfiber/spec/blob/main/20-architecture/contracts/plugin-manifest.md
