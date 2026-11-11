@@ -22,6 +22,7 @@ mod keys;
 mod library;
 mod members;
 mod rating;
+mod recounting;
 mod screening;
 mod serving;
 mod sessions;
