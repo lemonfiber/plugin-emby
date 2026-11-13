@@ -6,7 +6,7 @@ const KEY_LONGEST: usize = 128;
 
 const ITEM_LONGEST: usize = 19;
 
-const SOURCE_PREFIX: &str = "mediasource_";
+pub(crate) const SOURCE_PREFIX: &str = "mediasource_";
 
 /// Whether `id` is shaped like an id Emby files an account under: thirty-two hex
 /// digits, with or without the four dashes.

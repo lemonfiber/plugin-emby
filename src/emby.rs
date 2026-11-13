@@ -27,6 +27,7 @@ mod screening;
 mod serving;
 mod sessions;
 mod setup;
+mod tuning;
 mod upkeep;
 
 pub use declared::presented;
