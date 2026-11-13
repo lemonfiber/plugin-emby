@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 use super::{item_type, Emby};
 use lemonfiber_ports::http::Method;
-use lemonfiber_ports::media::Kind;
+use lemonfiber_ports::media::{Kind, TitleKind};
 use lemonfiber_ports::service::{Failure, Library};
 
 #[derive(Deserialize)]
@@ -18,10 +18,22 @@ struct LibraryItem {
     name: String,
 }
 
+const fn held_types(kind: TitleKind) -> &'static str {
+    match kind {
+        TitleKind::Tv => item_type(Kind::Tv),
+        TitleKind::Movies => item_type(Kind::Movies),
+        TitleKind::Music => "MusicAlbum,MusicArtist",
+        TitleKind::Books => "Book,AudioBook",
+    }
+}
+
 #[async_trait]
 impl Library for Emby {
-    async fn has_item(&self, kind: Kind, term: &str) -> Result<bool, Failure> {
-        let path = format!("/Items?Recursive=true&IncludeItemTypes={}", item_type(kind));
+    async fn has_item(&self, kind: TitleKind, term: &str) -> Result<bool, Failure> {
+        let path = format!(
+            "/Items?Recursive=true&IncludeItemTypes={}",
+            held_types(kind)
+        );
         let response = self.as_admin(Method::Get, &path, None).await?;
         let page: ItemPage = self
             .endpoint
