@@ -2,6 +2,7 @@ use async_trait::async_trait;
 
 use super::screening::picture_path;
 use super::{Emby, TOKEN_HEADER};
+use crate::shape::SOURCE_PREFIX;
 use lemonfiber_ports::http::Method;
 use lemonfiber_ports::service::{
     Addressee, Answers, BytePath, Declared, Declaring, Failure, Held, LivePath, Locations, Naming,
@@ -44,6 +45,8 @@ const BY_NAME: &str = "(?:Artists|Genres|GameGenres|MusicGenres|Persons|Studios)
 
 const STREAMED: &str = "VideoCodec=h264&AudioCodec=aac,mp3,ac3,eac3";
 
+const PLAYED_AS: &str = "lemonfiber-";
+
 /// How the guard presents a member's token to Emby: in the header Emby reads it from
 /// before any other.
 #[must_use]
@@ -81,6 +84,12 @@ fn byte_path(route: &str, item: &str, exempt: Vec<String>) -> BytePath {
     }
 }
 
+fn playlist() -> String {
+    format!(
+        "{BASE}/Videos/{ITEM}/master.m3u8?MediaSourceId={SOURCE_PREFIX}{ITEM}&PlaySessionId={PLAYED_AS}{ITEM}&{STREAMED}"
+    )
+}
+
 fn declared() -> Declared {
     Declared {
         bytes: vec![
@@ -104,6 +113,7 @@ fn declared() -> Declared {
             pattern: format!(
                 "{PREFIXED}/LiveTv/LiveStreamFiles/{STREAM_SEGMENT}/(?:stream\\.|hls/)"
             ),
+            parameter: None,
             stream: HEX.to_owned(),
         }],
         refused: vec![
@@ -123,11 +133,10 @@ fn declared() -> Declared {
             headers: TOKEN_HEADERS.map(str::to_owned).to_vec(),
         },
         locations: Locations {
-            stream: format!(
-                "{BASE}/Videos/{ITEM}/master.m3u8?MediaSourceId=mediasource_{ITEM}&{STREAMED}"
-            ),
+            stream: playlist(),
             poster: format!("{BASE}{}", picture_path(ITEM, Picture::Poster)),
             backdrop: format!("{BASE}{}", picture_path(ITEM, Picture::Backdrop)),
+            playlist: Some(playlist()),
         },
         ports: Ports {
             upstream: PORT,
