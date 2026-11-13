@@ -36,10 +36,14 @@ chooses to install it.
   `config/emby-adapter/upstream.json` as `{"username", "password"}`, from the
   password it minted for this server. The adapter reads it for every sign-in,
   never writes it, and never puts any of it in a log or an answer.
+- **The key it tells lemonfiber what happened with**, which lemonfiber mints and
+  writes to `config/emby-adapter/events.key` each time it wires the stack.
+- **Its cursor**, in `config/emby-adapter/events.json`: where lemonfiber is told
+  to send, and the newest item and activity entry already sent.
 
-Both files are owner-only. lemonfiber runs the adapter as the operator's uid, so
-the adapter can read them; the image's own user cannot. The image is distroless,
-non-root, with no shell and no package manager.
+Every one of these files is owner-only. lemonfiber runs the adapter as the
+operator's uid, so the adapter can read them; the image's own user cannot. The
+image is distroless, non-root, with no shell and no package manager.
 
 ## How Emby is set up
 
@@ -58,6 +62,21 @@ What Emby has no setting for, the adapter answers as unsupported rather than
 pretending: Emby holds no list of addresses trusted to name a client and no list
 of origins a browser may read it from, no outside service holds its accounts, and
 it signs no device in by a code.
+
+## How it tells lemonfiber what happened
+
+Asked by lemonfiber's `events`, the adapter tells it each film or episode Emby
+adds to a library, and each problem Emby logs about itself at a warning, an
+error or a fatal error. An activity entry that names a user, or that Emby files
+under accounts, a member's marks or playback, is never told, and neither is what
+anybody watches.
+
+It polls: it reads Emby's items and activity log every interval lemonfiber asks
+(`LEMONFIBER_EVENTS_POLL`, 60 seconds where unset). The first ask sends nothing
+older than that moment, and a stop drops the cursor.
+
+It never pushes. Emby's webhooks need Emby Premiere, and Emby's documented API
+neither registers a webhook nor says whether Premiere is active.
 
 ## What it needs
 
