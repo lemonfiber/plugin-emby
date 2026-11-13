@@ -75,6 +75,9 @@ It polls: it reads Emby's items and activity log every interval lemonfiber asks
 (`LEMONFIBER_EVENTS_POLL`, 60 seconds where unset). The first ask sends nothing
 older than that moment, and a stop drops the cursor.
 
+It never pushes. Emby's webhooks need Emby Premiere, and Emby's documented API
+neither registers a webhook nor says whether Premiere is active.
+
 ## What it needs
 
 - A lemonfiber that installs plugins whose services speak contracts.
