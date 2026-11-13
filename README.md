@@ -54,6 +54,28 @@ rather than as an age. The adapter reads each level as the age the British
 certificates Emby files at it are for, and writes an age as the highest level
 read at or below it.
 
+## Live TV
+
+Emby runs live TV only under an Emby Premiere subscription. The adapter asks Emby
+whether it holds one before every live TV answer. It answers the channels,
+tuning and closing a live stream as unsupported where Emby says it holds none,
+answers anything else, or does not answer.
+
+Where Emby holds Emby Premiere, the adapter reads whether the member's own
+account may watch live TV from that account's policy. It lists only the channels
+Emby shows that account, each with the programme on it now. It opens a channel
+on that account and answers the live stream's buffer under
+`/LiveTv/LiveStreamFiles/`, as the tuner sends it and as Emby's HLS playlist of
+it. **This path is unverified.** The pinned Emby has no Premiere key, so it opens
+no live stream. The calls follow the API description the pinned Emby serves and
+its own web client, and the tests hold them to fakes of those shapes.
+
+## Playing in a browser
+
+A browser plays an item from its HLS master playlist. The playlist's address
+carries a fresh play session id for every play. Emby writes that id into every
+segment it lists, and serves no segment without it.
+
 What Emby has no setting for, the adapter answers as unsupported rather than
 pretending: Emby holds no list of addresses trusted to name a client and no list
 of origins a browser may read it from, no outside service holds its accounts, and

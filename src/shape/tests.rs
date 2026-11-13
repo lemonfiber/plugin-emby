@@ -1,4 +1,7 @@
-use super::{a_device, a_key, an_account, an_item, sourced, Account, Item};
+use super::{
+    a_device, a_key, a_live_stream_file, a_play_session, an_account, an_item, sourced, Account,
+    Item, LiveStream,
+};
 
 #[test]
 fn an_account_is_thirty_two_hex_digits_with_or_without_its_dashes() {
@@ -82,4 +85,44 @@ fn a_key_is_letters_and_digits_and_never_a_path() {
     for refused in ["", "a/b", "a?b=c", "../keys", &"a".repeat(129)] {
         assert!(!a_key(refused), "{refused:?} was taken for a key");
     }
+}
+
+#[test]
+fn a_live_stream_is_named_by_its_id_a_dot_and_the_play_session_that_opened_it() {
+    let session = "986f9938c33c4e149a9ed1efdb4cb08f";
+    let named = format!("a7f3_9d1c-0.{session}");
+    let stream = LiveStream::of(&named);
+    assert_eq!(stream.map(|stream| stream.live()), Some("a7f3_9d1c-0"));
+    assert_eq!(stream.map(|stream| stream.play_session()), Some(session));
+    assert_eq!(stream.map(|stream| stream.to_string()), Some(named.clone()));
+    let longest = format!("{}.{session}", "a".repeat(200));
+    assert!(LiveStream::of(&longest).is_some());
+    for refused in [
+        String::new(),
+        session.to_owned(),
+        format!(".{session}"),
+        format!("{}.{session}", "a".repeat(201)),
+        format!("a/b.{session}"),
+        format!("a.b.{session}"),
+        "a.986f".to_owned(),
+        "conformance-live-stream".to_owned(),
+    ] {
+        assert_eq!(
+            LiveStream::of(&refused),
+            None,
+            "{refused:?} named a live stream"
+        );
+    }
+}
+
+#[test]
+fn a_buffer_is_thirty_two_lower_case_hex_digits_and_a_play_session_thirty_two_of_either_case() {
+    let lower = "0123456789abcdef0123456789abcdef";
+    assert!(a_live_stream_file(lower));
+    assert!(!a_live_stream_file(&lower.to_uppercase()));
+    assert!(!a_live_stream_file("0123456789abcdef0123456789abcde"));
+    assert!(!a_live_stream_file("0123456789abcdef0123456789abcdeg"));
+    assert!(a_play_session(lower));
+    assert!(a_play_session(&lower.to_uppercase()));
+    assert!(!a_play_session(&format!("{lower}0")));
 }

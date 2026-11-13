@@ -6,7 +6,7 @@ use crate::shape::SOURCE_PREFIX;
 use lemonfiber_ports::http::Method;
 use lemonfiber_ports::service::{
     Addressee, Answers, BytePath, Declared, Declaring, Failure, Held, LivePath, Locations, Naming,
-    Picture, Ports, Presentation, Question, Token, BASE, ITEM, MAY, TOKEN,
+    Picture, Ports, Presentation, Question, Token, BASE, ITEM, MAY, PLAY, TOKEN,
 };
 
 const PORT: u16 = 8096;
@@ -44,8 +44,6 @@ const PICTURED: &str = "(?:Images|Download|File|ThumbnailSet)";
 const BY_NAME: &str = "(?:Artists|Genres|GameGenres|MusicGenres|Persons|Studios)";
 
 const STREAMED: &str = "VideoCodec=h264&AudioCodec=aac,mp3,ac3,eac3";
-
-const PLAYED_AS: &str = "lemonfiber-";
 
 /// How the guard presents a member's token to Emby: in the header Emby reads it from
 /// before any other.
@@ -86,7 +84,7 @@ fn byte_path(route: &str, item: &str, exempt: Vec<String>) -> BytePath {
 
 fn playlist() -> String {
     format!(
-        "{BASE}/Videos/{ITEM}/master.m3u8?MediaSourceId={SOURCE_PREFIX}{ITEM}&PlaySessionId={PLAYED_AS}{ITEM}&{STREAMED}"
+        "{BASE}/Videos/{ITEM}/master.m3u8?MediaSourceId={SOURCE_PREFIX}{ITEM}&PlaySessionId={PLAY}&{STREAMED}"
     )
 }
 
