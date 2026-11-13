@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use super::{keys, Emby};
 use lemonfiber_ports::http::Method;
 use lemonfiber_ports::service::{
-    AppKeys, Astray, Dated, Failure, Fronted, OutsideAccount, OutsideServer,
+    Allowing, AppKeys, Astray, Dated, Failure, Fronted, OutsideAccount, OutsideServer,
 };
 
 const RESTART: &str = "/System/Restart";
@@ -37,6 +37,13 @@ impl Fronted for Emby {
     async fn restart(&self) -> Result<(), Failure> {
         let response = self.as_admin(Method::Post, RESTART, None).await?;
         self.endpoint.expect_success(&response)
+    }
+}
+
+#[async_trait]
+impl Allowing for Emby {
+    async fn allow_origins(&self, _origins: &[String]) -> Result<(), Failure> {
+        Err(Self::unsupported(NO_ORIGINS))
     }
 }
 
