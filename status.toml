@@ -6,7 +6,9 @@
 # request that changes whether a requirement is met changes its row.
 #
 # Writing the adapter's key and its upstream's credential, running it as the operator,
-# and running the substitute proof are the core's.
+# and running the substitute proof are the core's. The adapter hears Emby by polling
+# alone: Emby's documented API neither registers a webhook nor says whether Emby
+# Premiere is active.
 
 requirement = [
   { id = "ARCH-R206", state = "done", evidence = ["src/emby/declared.rs", "src/emby/members.rs", "tests/integration/emby/declaring.rs::the_declaration_is_one_a_guard_can_enforce", "tests/integration/emby/declaring/door.rs::a_guard_enforcing_the_declaration_passes_only_what_the_member_may_have", "conformance/media.serve@1/declared-answers.json"] },
