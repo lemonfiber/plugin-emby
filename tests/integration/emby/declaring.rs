@@ -166,18 +166,22 @@ async fn the_guard_asks_the_adapter_and_presents_the_token_where_emby_reads_it_f
 }
 
 #[tokio::test]
-async fn an_item_is_streamed_and_pictured_where_emby_serves_it_beneath_the_door() {
+async fn an_item_is_streamed_played_in_a_browser_and_pictured_where_emby_serves_it_beneath_the_door(
+) {
     let declared = declared().await;
+    let played = "{base}/Videos/{item}/master.m3u8?MediaSourceId=mediasource_{item}&PlaySessionId={play}&VideoCodec=h264&AudioCodec=aac,mp3,ac3,eac3";
     assert_eq!(
         declared.as_ref().map(|declared| (
             declared.locations.stream.as_str(),
             declared.locations.poster.as_str(),
-            declared.locations.backdrop.as_str()
+            declared.locations.backdrop.as_str(),
+            declared.locations.playlist.as_deref()
         )),
         Some((
-            "{base}/Videos/{item}/master.m3u8?MediaSourceId=mediasource_{item}&VideoCodec=h264&AudioCodec=aac,mp3,ac3,eac3",
+            played,
             "{base}/Items/{item}/Images/Primary",
             "{base}/Items/{item}/Images/Backdrop",
+            Some(played),
         ))
     );
     assert_eq!(

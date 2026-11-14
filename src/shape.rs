@@ -6,7 +6,13 @@ const KEY_LONGEST: usize = 128;
 
 const ITEM_LONGEST: usize = 19;
 
-const SOURCE_PREFIX: &str = "mediasource_";
+pub(crate) const SOURCE_PREFIX: &str = "mediasource_";
+
+const LIVE_STREAM_LONGEST: usize = 200;
+
+const HEX_DIGITS: usize = 32;
+
+const CLOSED_BY: char = '.';
 
 /// Whether `id` is shaped like an id Emby files an account under: thirty-two hex
 /// digits, with or without the four dashes.
@@ -36,6 +42,66 @@ pub fn sourced(id: &str) -> Option<&str> {
         .and_then(|_| id.get(SOURCE_PREFIX.len()..))
         .unwrap_or(id);
     an_item(item).then_some(item)
+}
+
+fn hex(text: &str) -> bool {
+    text.len() == HEX_DIGITS && text.bytes().all(|digit| digit.is_ascii_hexdigit())
+}
+
+/// Whether `id` is shaped like the id Emby serves an opened live stream's buffer under:
+/// thirty-two lower-case hex digits.
+#[must_use]
+pub fn a_live_stream_file(id: &str) -> bool {
+    hex(id) && !id.bytes().any(|digit| digit.is_ascii_uppercase())
+}
+
+/// Whether `id` is shaped like the id Emby names a play session by: thirty-two hex digits.
+#[must_use]
+pub fn a_play_session(id: &str) -> bool {
+    hex(id)
+}
+
+fn a_live_stream_id(id: &str) -> bool {
+    (1..=LIVE_STREAM_LONGEST).contains(&id.len())
+        && id
+            .chars()
+            .all(|letter| letter.is_ascii_alphanumeric() || letter == '_' || letter == '-')
+}
+
+/// An opened live stream, as this adapter names what closes it: Emby's id for the live
+/// stream, a dot, and the play session that opened it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LiveStream<'a> {
+    live: &'a str,
+    play_session: &'a str,
+}
+
+impl<'a> LiveStream<'a> {
+    /// `text`, where it is shaped like a live stream's id, a dot and a play session.
+    #[must_use]
+    pub fn of(text: &'a str) -> Option<Self> {
+        let (live, play_session) = text.split_once(CLOSED_BY)?;
+        (a_live_stream_id(live) && a_play_session(play_session))
+            .then_some(Self { live, play_session })
+    }
+
+    /// Emby's id for the live stream.
+    #[must_use]
+    pub const fn live(&self) -> &'a str {
+        self.live
+    }
+
+    /// The play session that opened it.
+    #[must_use]
+    pub const fn play_session(&self) -> &'a str {
+        self.play_session
+    }
+}
+
+impl std::fmt::Display for LiveStream<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}{CLOSED_BY}{}", self.live, self.play_session)
+    }
 }
 
 /// A value held to the shape of an id Emby files an account under.
