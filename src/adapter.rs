@@ -1,13 +1,16 @@
 //! What this adapter says it is, and the kit that serves its contracts.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use lemonfiber_adapter_kit::members::Asking;
+use lemonfiber_adapter_kit::recounting::Recounter;
 use lemonfiber_adapter_kit::{Kit, Readiness};
 use lemonfiber_contract::adapter::{About, Release};
 use lemonfiber_contract::capabilities::{identity, media};
+use lemonfiber_ports::narration::Narrator;
 
-use crate::emby::{presented, Emby};
+use crate::emby::{presented, Emby, Happenings, SERVICE};
 
 /// Where Emby answers, by its service id and the port it listens on.
 pub const ADDRESS: &str = "http://emby:8096";
@@ -41,6 +44,27 @@ pub fn about() -> About {
 /// guard's question about an item answered by asking Emby with the member's token.
 #[must_use]
 pub fn kit(key: String, emby: Arc<Emby>) -> Kit {
+    serving(Kit::new(key, about()), emby)
+}
+
+/// Both contracts, served from `emby` under `key`, telling the core what happened with
+/// its cursor kept beneath `configuration` and what it says said to `narrator`.
+#[must_use]
+pub fn recounting_kit(
+    key: String,
+    emby: Arc<Emby>,
+    configuration: &Path,
+    narrator: Arc<dyn Narrator>,
+) -> Kit {
+    let happenings = Arc::new(Happenings(Arc::downgrade(&emby)));
+    let recounter = Recounter::new(SERVICE, configuration, happenings, narrator);
+    emby.recounted_by(recounter.clone());
+    serving(Kit::new(key, about()).recounted_by(recounter), emby)
+}
+
+/// `kit` ready while Emby answers, serving both contracts from `emby` and answering the
+/// guard's question about an item by asking Emby with the member's token.
+fn serving(kit: Kit, emby: Arc<Emby>) -> Kit {
     let asked = Arc::clone(&emby);
     let ready: Readiness = Arc::new(move || {
         let asked = Arc::clone(&asked);
@@ -51,8 +75,7 @@ pub fn kit(key: String, emby: Arc<Emby>) -> Kit {
         let members = Arc::clone(&members);
         Box::pin(async move { members.may(&space, &item, &token).await })
     });
-    Kit::new(key, about())
-        .ready_when(ready)
+    kit.ready_when(ready)
         .asked_by_members(presented(), asking)
         .serving(media::serve::served(Arc::clone(&emby)))
         .serving(identity::source::served(emby))

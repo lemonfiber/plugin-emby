@@ -31,6 +31,7 @@ mod tuning;
 mod upkeep;
 
 pub use declared::presented;
+pub use recounting::Happenings;
 pub use sessions::Sessions;
 
 /// What every failure is blamed on.
@@ -77,6 +78,7 @@ pub struct Emby {
     held: Arc<dyn Holding>,
     sessions: Sessions,
     internal_tls: Option<lemonfiber_pinned::Https>,
+    recounter: std::sync::OnceLock<lemonfiber_adapter_kit::recounting::Recounter>,
 }
 
 impl Emby {
@@ -90,6 +92,7 @@ impl Emby {
             http,
             held,
             sessions: Sessions::default(),
+            recounter: std::sync::OnceLock::new(),
         }
     }
 
