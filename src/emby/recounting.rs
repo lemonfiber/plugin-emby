@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use lemonfiber_ports::service::{Failure, Recounting};
+use lemonfiber_ports::service::{Failure, Heard, Recounting};
 
 use super::Emby;
 
@@ -13,7 +13,8 @@ impl Recounting for Emby {
         _address: Option<&str>,
         _pin: Option<&str>,
         _key: Option<&str>,
-    ) -> Result<(), Failure> {
+        _every: Option<u32>,
+    ) -> Result<Option<Heard>, Failure> {
         Err(Self::unsupported(NOT_YET))
     }
 }

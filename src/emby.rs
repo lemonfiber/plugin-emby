@@ -27,6 +27,7 @@ mod screening;
 mod serving;
 mod sessions;
 mod setup;
+mod tuning;
 mod upkeep;
 
 pub use declared::presented;
@@ -42,6 +43,17 @@ const TOKEN_HEADER: &str = "X-Emby-Token";
 const PUBLIC_INFO: &str = "/System/Info/Public";
 
 const SIGN_IN: &str = "/Users/AuthenticateByName";
+
+/// A moment Emby wrote, where it wrote one that reads as an instant: its `0001-01-01` for
+/// never, and text that names no instant, read as none.
+pub(crate) fn moment<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<lemonfiber_ports::Instant>, D::Error> {
+    Ok(Option::<String>::deserialize(deserializer)?
+        .as_deref()
+        .and_then(lemonfiber_ports::Instant::from_service_text)
+        .filter(|at| at.seconds() > 0))
+}
 
 fn signing_in(device: &str) -> String {
     format!(r#"Emby Client="lemonfiber", Device="lemonfiber", DeviceId="{device}", Version="1""#)
@@ -115,6 +127,7 @@ impl Emby {
                 .collect(),
             body,
             pinned: None,
+            deadline: None,
         }
     }
 

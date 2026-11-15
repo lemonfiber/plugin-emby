@@ -27,7 +27,7 @@ async fn the_keys_filed_under_an_app_are_its_own_and_dated_as_emby_made_them() {
     assert_eq!(
         emby.dated("lemonfiber").await.ok(),
         Some(vec![Dated {
-            created: Some("2026-11-06T00:00:00Z".to_owned()),
+            created: lemonfiber_ports::Instant::from_service_text("2026-11-06T00:00:00Z"),
             last_used: None
         }])
     );

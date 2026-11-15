@@ -51,7 +51,7 @@ async fn each_account_is_read_with_what_it_may_watch_said_as_an_age() {
                 member.access.unrated,
                 member.access.administrator,
                 member.access.disabled,
-                member.last_seen.as_deref(),
+                member.last_seen,
             )
         })
         .collect();
@@ -67,7 +67,7 @@ async fn each_account_is_read_with_what_it_may_watch_said_as_an_age() {
                 Unrated::LetThrough,
                 true,
                 false,
-                Some("2026-11-01T00:00:00Z")
+                lemonfiber_ports::Instant::from_service_text("2026-11-01T00:00:00Z")
             ),
             (
                 "bo",
@@ -78,7 +78,7 @@ async fn each_account_is_read_with_what_it_may_watch_said_as_an_age() {
                 Unrated::HeldBack,
                 false,
                 true,
-                Some("2026-11-02T00:00:00Z")
+                lemonfiber_ports::Instant::from_service_text("2026-11-02T00:00:00Z")
             ),
             (
                 "cy",
@@ -203,10 +203,12 @@ async fn each_account_made_since_is_dated_by_the_latest_of_its_making_and_what_e
         ("/Users/9", Answer::reply(200, r#"{"Id":"not-an-id"}"#)),
         ("/Users", Answer::reply(200, MADE)),
     ]);
-    let invited = reader(&fake).when_invited("2026-08-01T00:00:00Z").await;
+    let invited = reader(&fake)
+        .when_invited(lemonfiber_ports::Instant::from_seconds(1_785_542_400))
+        .await;
     let at = |member: &str, at: &str| Invited {
         member: member.to_owned(),
-        at: at.to_owned(),
+        at: lemonfiber_ports::Instant::from_service_text(at),
     };
     assert_eq!(
         invited.ok(),
@@ -247,7 +249,10 @@ async fn an_account_emby_recorded_and_cannot_name_fails_the_read() {
         ("/Users/2", Answer::reply(500, "")),
         ("/Users", Answer::reply(200, "[]")),
     ]);
-    assert!(reader(&fake).when_invited("since").await.is_err());
+    assert!(reader(&fake)
+        .when_invited(lemonfiber_ports::Instant::from_seconds(0))
+        .await
+        .is_err());
 }
 
 #[tokio::test]
@@ -530,10 +535,15 @@ async fn the_devices_signed_in_to_one_account_are_its_sessions_alone() {
                 session.device_id.as_str(),
                 session.device.as_str(),
                 session.client.as_str(),
-                session.last_seen.as_deref()
+                session.last_seen
             ))
             .collect::<Vec<_>>(),
-        [("tv", "Lounge", "Emby Theater", Some("2026-11-06T00:00:00Z"))]
+        [(
+            "tv",
+            "Lounge",
+            "Emby Theater",
+            lemonfiber_ports::Instant::from_service_text("2026-11-06T00:00:00Z")
+        )]
     );
     assert!(!held.iter().any(|session| session.device_id == ADMIN));
 }
@@ -560,8 +570,48 @@ async fn an_activity_log_or_a_household_emby_answers_unreadably_is_refused() {
     ] {
         let fake = Fake::in_turn(answers);
         assert!(matches!(
-            reader(&fake).when_invited("since").await,
+            reader(&fake)
+                .when_invited(lemonfiber_ports::Instant::from_seconds(0))
+                .await,
             Err(Failure::Refused { .. })
         ));
     }
+}
+
+#[tokio::test]
+async fn a_device_emby_dates_never_or_in_a_way_no_instant_reads_was_seen_at_no_time() {
+    let fake = Fake::in_turn(vec![
+        Answer::reply(200, SIGNED_IN),
+        Answer::reply(
+            200,
+            r#"[{"UserId":"4f53cda18c2baa0c0354bb5f9a3ecbe5","DeviceId":"tv","DeviceName":"Lounge","Client":"Emby Theater","LastActivityDate":"0001-01-01T00:00:00.0000000Z"},
+                {"UserId":"4f53cda18c2baa0c0354bb5f9a3ecbe5","DeviceId":"phone","DeviceName":"Phone","Client":"Emby","LastActivityDate":"yesterday"}]"#,
+        ),
+    ]);
+    let seen: Vec<_> = reader(&fake)
+        .sessions(MEMBER)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|session| session.last_seen)
+        .collect();
+    assert_eq!(seen, [None, None]);
+}
+
+#[tokio::test]
+async fn no_code_signs_a_member_in_since_emby_holds_its_accounts_itself() {
+    let fake = Fake::in_turn(Vec::new());
+    let client = reader(&fake);
+    let unsupported = |said: &Failure| matches!(said, Failure::Unsupported { detail, .. } if detail.contains("holds its accounts itself"));
+    assert!(client
+        .sign_in_by_code("phone-1")
+        .await
+        .err()
+        .is_some_and(|said| unsupported(&said)));
+    assert!(client
+        .signed_by_code("c1")
+        .await
+        .err()
+        .is_some_and(|said| unsupported(&said)));
+    assert!(fake.requests().is_empty());
 }

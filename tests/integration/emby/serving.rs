@@ -1,7 +1,7 @@
 use super::{asked, reader, SIGNED_IN};
 use lemonfiber_fixtures::http::{Answer, Fake};
 use lemonfiber_ports::http::Method;
-use lemonfiber_ports::service::{AppKeys, Failure, Fronted};
+use lemonfiber_ports::service::{Allowing, AppKeys, Failure, Fronted};
 
 fn unsupported<T>(answer: &Result<T, Failure>) -> bool {
     matches!(answer, Err(Failure::Unsupported { .. }))
@@ -15,6 +15,14 @@ async fn what_emby_holds_no_setting_for_is_unsupported_and_emby_is_not_asked() {
     assert!(unsupported(&emby.trust_only("10.0.0.2").await));
     assert!(unsupported(&emby.allowed_origins().await));
     assert!(unsupported(&emby.allow_only("https://watch.example").await));
+    assert!(unsupported(
+        &emby
+            .allow_origins(&[
+                "https://watch.example".to_owned(),
+                "https://play.example".to_owned()
+            ])
+            .await
+    ));
     assert!(unsupported(&emby.account("lemonfiber").await));
     assert!(unsupported(&emby.listed_as().await));
     assert!(fake.requests().is_empty());
