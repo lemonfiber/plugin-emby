@@ -84,6 +84,7 @@ its own web client, and the tests hold them to fakes of those shapes.
 A browser plays an item from its HLS master playlist. The playlist's address
 carries a fresh play session id for every play. Emby writes that id into every
 segment it lists, and serves no segment without it.
+
 ## How it tells lemonfiber what happened
 
 Asked by lemonfiber's `events`, the adapter tells it each film or episode Emby
