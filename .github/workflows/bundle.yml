@@ -1,0 +1,19 @@
+# Ask the catalogue to move this plugin's pin in the default bundle once the train's
+# `release/adapter-pin` merges, through spec's reusable `first-party-bundle` (OPS-R86).
+name: bundle
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: lemonfiber/spec/.github/workflows/first-party-bundle.yml@c39b30a096b2debc080e3d945b782dc67dc20a6c # v1.0.147
+    with:
+      pin: adapter
+    secrets:
+      RELEASE_APP_KEY: ${{ secrets.RELEASE_APP_KEY }}
