@@ -77,8 +77,8 @@ struct ProgrammeResource {
     title: String,
     #[serde(rename = "OfficialRating", default)]
     certificate: Option<String>,
-    #[serde(rename = "EndDate", default)]
-    ends: Option<String>,
+    #[serde(rename = "EndDate", default, deserialize_with = "crate::emby::moment")]
+    ends: Option<lemonfiber_ports::Instant>,
 }
 
 #[derive(serde::Deserialize)]
@@ -283,7 +283,7 @@ impl ChannelResource {
                 .map(|now| Programme {
                     title: now.title,
                     certificate: now.certificate.filter(|rating| !rating.is_empty()),
-                    ends: now.ends.filter(|ends| !ends.is_empty()),
+                    ends: now.ends,
                 }),
         }
     }

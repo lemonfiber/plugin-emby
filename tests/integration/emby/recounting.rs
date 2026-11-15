@@ -12,6 +12,7 @@ async fn asked_to_tell_the_core_what_happened_it_says_it_cannot_yet_and_asks_emb
             Some("https://core.invalid/api/notify/events"),
             Some(&"ab".repeat(32)),
             Some("key"),
+            Some(60),
         )
         .await;
     assert!(

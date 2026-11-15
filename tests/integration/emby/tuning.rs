@@ -115,7 +115,9 @@ async fn the_channels_are_the_member_s_own_with_what_is_on_now_and_its_certifica
                 now: Some(Programme {
                     title: "Morning Film".to_owned(),
                     certificate: Some("TV-14".to_owned()),
-                    ends: Some("2026-11-13T18:00:00.0000000Z".to_owned()),
+                    ends: lemonfiber_ports::Instant::from_service_text(
+                        "2026-11-13T18:00:00.0000000Z"
+                    ),
                 }),
             },
             Channel {

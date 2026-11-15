@@ -54,6 +54,11 @@ rather than as an age. The adapter reads each level as the age the British
 certificates Emby files at it are for, and writes an age as the highest level
 read at or below it.
 
+What Emby has no setting for, the adapter answers as unsupported rather than
+pretending: Emby holds no list of addresses trusted to name a client and no list
+of origins a browser may read it from, no outside service holds its accounts, and
+it signs no device in by a code.
+
 ## Live TV
 
 Emby runs live TV only under an Emby Premiere subscription. The adapter asks Emby
@@ -75,11 +80,6 @@ its own web client, and the tests hold them to fakes of those shapes.
 A browser plays an item from its HLS master playlist. The playlist's address
 carries a fresh play session id for every play. Emby writes that id into every
 segment it lists, and serves no segment without it.
-
-What Emby has no setting for, the adapter answers as unsupported rather than
-pretending: Emby holds no list of addresses trusted to name a client and no list
-of origins a browser may read it from, no outside service holds its accounts, and
-it signs no device in by a code.
 
 ## What it needs
 

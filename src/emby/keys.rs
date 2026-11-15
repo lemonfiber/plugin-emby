@@ -96,6 +96,10 @@ struct Key {
     app_name: String,
     #[serde(rename = "AccessToken", default)]
     access_token: String,
-    #[serde(rename = "DateCreated", default)]
-    created: Option<String>,
+    #[serde(
+        rename = "DateCreated",
+        default,
+        deserialize_with = "crate::emby::moment"
+    )]
+    created: Option<lemonfiber_ports::Instant>,
 }
