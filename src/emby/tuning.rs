@@ -1,16 +1,23 @@
 use async_trait::async_trait;
 
-use super::Emby;
+use super::{rating, Emby};
 use crate::shape::{a_live_stream_file, a_play_session, Account, Item, LiveStream};
 use lemonfiber_adapter_kit::endpoint::form_encoded;
 use lemonfiber_ports::http::Method;
-use lemonfiber_ports::service::{Channel, Failure, Programme, Tuned, Tuning};
+use lemonfiber_ports::instant::HOUR;
+use lemonfiber_ports::service::{
+    Airing, Channel, Failure, Household as _, Listing, Programme, Tuned, Tuning, GUIDE_HOURS,
+};
+use lemonfiber_ports::Instant;
+use std::collections::HashMap;
 
 const LICENSED: &str = "/Plugins/SecurityInfo";
 
 const CHANNELS: &str = "/LiveTv/Channels";
 
 const CLOSE: &str = "/LiveStreams/Close";
+
+const PROGRAMMES: &str = "/LiveTv/Programs";
 
 const FILES: &str = "/livetv/livestreamfiles/";
 
@@ -26,6 +33,8 @@ const UNLICENSED: &str =
 const UNREAD_ACCESS: &str = "whether the account may watch live TV could not be read";
 
 const UNREAD_CHANNELS: &str = "the live TV channels could not be read";
+
+const UNREAD_GUIDE: &str = "the guide could not be read";
 
 const UNREAD_OPENED: &str = "the live stream Emby opened could not be read";
 
@@ -51,6 +60,12 @@ struct Access {
     live_tv: bool,
     #[serde(rename = "IsDisabled", default)]
     disabled: bool,
+    #[serde(rename = "MaxParentalRating", default)]
+    level: Option<u32>,
+    #[serde(rename = "BlockedTags", default)]
+    blocked_tags: Vec<String>,
+    #[serde(rename = "BlockUnratedItems", default)]
+    unrated_blocked: Vec<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -72,13 +87,29 @@ struct ChannelResource {
 }
 
 #[derive(serde::Deserialize)]
+struct ProgrammesResource {
+    #[serde(rename = "Items", default)]
+    items: Vec<ProgrammeResource>,
+}
+
+#[derive(serde::Deserialize)]
 struct ProgrammeResource {
+    #[serde(rename = "ChannelId", default)]
+    channel: String,
     #[serde(rename = "Name", default)]
     title: String,
     #[serde(rename = "OfficialRating", default)]
     certificate: Option<String>,
+    #[serde(rename = "Tags", default)]
+    tags: Vec<String>,
+    #[serde(
+        rename = "StartDate",
+        default,
+        deserialize_with = "crate::emby::moment"
+    )]
+    starts: Option<Instant>,
     #[serde(rename = "EndDate", default, deserialize_with = "crate::emby::moment")]
-    ends: Option<lemonfiber_ports::Instant>,
+    ends: Option<Instant>,
 }
 
 #[derive(serde::Deserialize)]
@@ -110,6 +141,56 @@ impl Tuning for Emby {
             return Ok(Vec::new());
         }
         listed(self, member, None).await
+    }
+
+    async fn guide(&self, member: &str, hours: u32) -> Result<Vec<Listing>, Failure> {
+        licensed(self).await?;
+        let member = Account::of(member).ok_or_else(|| self.misshapen("an account"))?;
+        if !GUIDE_HOURS.contains(&hours) {
+            return Err(self.endpoint.refused(&format!(
+                "a guide is asked across {} to {} hours",
+                GUIDE_HOURS.start(),
+                GUIDE_HOURS.end()
+            )));
+        }
+        let Some(access) = live_tv_access(self, member).await? else {
+            return Ok(Vec::new());
+        };
+        let channels = listed(self, member, None).await?;
+        if channels.is_empty() {
+            return Ok(Vec::new());
+        }
+        let now = Instant::of(std::time::SystemTime::now());
+        let (Some(from), Some(until)) = (stamped(now), stamped(now.later(u64::from(hours) * HOUR)))
+        else {
+            return Err(self
+                .endpoint
+                .refused("the guide's window falls outside the calendar"));
+        };
+        let window = Window {
+            channels: &channels,
+            from: &from,
+            until: &until,
+        };
+        let held = aired(scheduled(self, &window, None).await?);
+        let ages = ages(self, &access).await?;
+        let mut kept = aired(
+            scheduled(self, &window, Some(member))
+                .await?
+                .into_iter()
+                .filter(|programme| admitted(programme, &access, &ages))
+                .collect(),
+        );
+        Ok(channels
+            .into_iter()
+            .map(|channel| Listing {
+                until: held
+                    .get(&channel.id)
+                    .and_then(|programmes| programmes.iter().map(|airing| airing.ends).max()),
+                programmes: kept.remove(&channel.id).unwrap_or_default(),
+                channel: channel.id,
+            })
+            .collect())
     }
 
     async fn tune(&self, member: &str, channel: &str) -> Result<Option<Tuned>, Failure> {
@@ -155,11 +236,49 @@ async fn licensed(emby: &Emby) -> Result<(), Failure> {
 }
 
 async fn watches_live_tv(emby: &Emby, member: Account<'_>) -> Result<bool, Failure> {
+    Ok(live_tv_access(emby, member).await?.is_some())
+}
+
+async fn live_tv_access(emby: &Emby, member: Account<'_>) -> Result<Option<Access>, Failure> {
     let response = emby
         .as_admin(Method::Get, &format!("/Users/{member}"), None)
         .await?;
     let holder: Holder = emby.endpoint.decode(&response, UNREAD_ACCESS)?;
-    Ok(holder.policy.live_tv && !holder.policy.disabled)
+    let access = holder.policy;
+    Ok((access.live_tv && !access.disabled).then_some(access))
+}
+
+async fn ages(emby: &Emby, access: &Access) -> Result<HashMap<String, u32>, Failure> {
+    if access.level.is_none() {
+        return Ok(HashMap::new());
+    }
+    Ok(emby
+        .ratings()
+        .await?
+        .into_iter()
+        .map(|rating| (rating.name.to_lowercase(), rating.age))
+        .collect())
+}
+
+fn admitted(programme: &ProgrammeResource, access: &Access, ages: &HashMap<String, u32>) -> bool {
+    let blocked = programme.tags.iter().any(|tag| {
+        access
+            .blocked_tags
+            .iter()
+            .any(|blocked| blocked.eq_ignore_ascii_case(tag))
+    });
+    let certificate = programme
+        .certificate
+        .as_deref()
+        .filter(|rated| !rated.is_empty());
+    let unrated_held = certificate.is_none() && !access.unrated_blocked.is_empty();
+    let too_old = access.level.map(rating::age_within).is_some_and(|limit| {
+        certificate.is_some_and(|rated| {
+            ages.get(&rated.to_lowercase())
+                .is_none_or(|age| *age > limit)
+        })
+    });
+    !blocked && !unrated_held && !too_old
 }
 
 async fn listed(
@@ -192,6 +311,73 @@ async fn listed(
         .filter(|channel| Item::of(&channel.id).is_some())
         .map(ChannelResource::channel)
         .collect())
+}
+
+struct Window<'a> {
+    channels: &'a [Channel],
+    from: &'a str,
+    until: &'a str,
+}
+
+async fn scheduled(
+    emby: &Emby,
+    window: &Window<'_>,
+    member: Option<Account<'_>>,
+) -> Result<Vec<ProgrammeResource>, Failure> {
+    let ids = window
+        .channels
+        .iter()
+        .map(|channel| channel.id.as_str())
+        .collect::<Vec<_>>()
+        .join(",");
+    let member = member.map(|member| member.to_string());
+    let mut fields = vec![
+        ("ChannelIds", ids.as_str()),
+        ("MinEndDate", window.from),
+        ("MaxStartDate", window.until),
+        ("Fields", "Tags"),
+        ("EnableImages", "false"),
+        ("EnableUserData", "false"),
+    ];
+    if let Some(member) = &member {
+        fields.push(("UserId", member.as_str()));
+    }
+    let response = emby
+        .as_admin(
+            Method::Get,
+            &format!("{PROGRAMMES}?{}", form_encoded(&fields)),
+            None,
+        )
+        .await?;
+    let page: ProgrammesResource = emby.endpoint.decode(&response, UNREAD_GUIDE)?;
+    Ok(page.items)
+}
+
+fn stamped(at: Instant) -> Option<String> {
+    at.calendar().map(|text| format!("{text}Z"))
+}
+
+fn certified(certificate: Option<String>) -> Option<String> {
+    certificate.filter(|rating| !rating.is_empty())
+}
+
+fn aired(scheduled: Vec<ProgrammeResource>) -> HashMap<String, Vec<Airing>> {
+    let mut aired: HashMap<String, Vec<Airing>> = HashMap::new();
+    for programme in scheduled {
+        let (Some(starts), Some(ends)) = (programme.starts, programme.ends) else {
+            continue;
+        };
+        aired.entry(programme.channel).or_default().push(Airing {
+            title: programme.title,
+            certificate: certified(programme.certificate),
+            starts,
+            ends,
+        });
+    }
+    for programmes in aired.values_mut() {
+        programmes.sort_by_key(|airing| airing.starts);
+    }
+    aired
 }
 
 async fn opened(
@@ -282,7 +468,7 @@ impl ChannelResource {
                 .filter(|now| !now.title.is_empty())
                 .map(|now| Programme {
                     title: now.title,
-                    certificate: now.certificate.filter(|rating| !rating.is_empty()),
+                    certificate: certified(now.certificate),
                     ends: now.ends,
                 }),
         }

@@ -1,4 +1,4 @@
-use super::{age, level};
+use super::{age, age_within, level};
 
 #[test]
 fn each_level_is_read_as_the_age_its_british_certificates_are_for() {
@@ -8,6 +8,15 @@ fn each_level_is_read_as_the_age_its_british_certificates_are_for() {
     );
     assert_eq!(age(12), None);
     assert_eq!(age(0), None);
+}
+
+#[test]
+fn a_level_off_the_ladder_is_read_as_the_age_of_the_highest_level_below_it_and_none_as_the_strictest(
+) {
+    assert_eq!(
+        [0, 1, 12, 14, 15, 99].map(age_within),
+        [0, 0, 18, 18, 21, 21]
+    );
 }
 
 #[test]

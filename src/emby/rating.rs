@@ -20,6 +20,15 @@ pub(super) fn age(level: u32) -> Option<u32> {
         .map(|(_, age)| *age)
 }
 
+pub(super) fn age_within(level: u32) -> u32 {
+    LADDER
+        .iter()
+        .filter(|(at, _)| *at <= level)
+        .map(|(_, age)| *age)
+        .max()
+        .unwrap_or_default()
+}
+
 pub(super) fn level(age: u32) -> u32 {
     LADDER
         .iter()
