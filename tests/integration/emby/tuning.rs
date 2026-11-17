@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use lemonfiber_fixtures::http::{Answer, Fake};
 use lemonfiber_ports::http::Method;
-use lemonfiber_ports::service::{Channel, Declaring as _, Failure, Programme, Tuned, Tuning as _};
+use lemonfiber_ports::service::{
+    Airing, Channel, Declaring as _, Failure, Listing, Programme, Tuned, Tuning as _,
+};
 use regex::Regex;
 
 use super::{reader, MEMBER, SIGNED_IN};
@@ -15,6 +17,8 @@ const HOLDER: &str = "/Users/4f53cda18c2baa0c0354bb5f9a3ecbe5";
 
 const CHANNELS: &str = "/LiveTv/Channels";
 
+const PROGRAMMES: &str = "/LiveTv/Programs";
+
 const OPENING: &str = "/PlaybackInfo";
 
 const CLOSING: &str = "/LiveStreams/Close";
@@ -26,6 +30,18 @@ const SUPPORTER: &str = r#"{"IsMBSupporter":true}"#;
 const WATCHES: &str = r#"{"Id":"4f53cda18c2baa0c0354bb5f9a3ecbe5","Policy":{"EnableLiveTvAccess":true,"IsDisabled":false,"EnableAllChannels":true}}"#;
 
 const SHOWN: &str = r#"{"Items":[{"Id":"12","Name":"Channel One","Type":"TvChannel","ChannelNumber":"1","CurrentProgram":{"Id":"40","Name":"Morning Film","OfficialRating":"TV-14","StartDate":"2026-11-13T17:00:00.0000000Z","EndDate":"2026-11-13T18:00:00.0000000Z"}},{"Id":"13","Name":"Channel Two","Type":"TvChannel","ChannelNumber":"","CurrentProgram":{"Name":"","OfficialRating":"TV-MA"}},{"Id":"../13","Name":"Elsewhere"}],"TotalRecordCount":3}"#;
+
+const SCHEDULED: &str = r#"{"Items":[{"Id":"41","Name":"Evening News","OfficialRating":"","ChannelId":"12","Type":"Program","StartDate":"2026-11-13T18:00:00.0000000Z","EndDate":"2026-11-13T19:00:00.0000000Z"},{"Id":"40","Name":"Morning Film","OfficialRating":"TV-14","ChannelId":"12","Type":"Program","StartDate":"2026-11-13T17:00:00.0000000Z","EndDate":"2026-11-13T18:00:00.0000000Z"},{"Id":"43","Name":"Fright Night","OfficialRating":"TV-PG","ChannelId":"12","Type":"Program","Tags":["horror"],"StartDate":"2026-11-13T19:00:00.0000000Z","EndDate":"2026-11-13T20:30:00.0000000Z"},{"Id":"42","Name":"Undated","OfficialRating":"TV-G","ChannelId":"13","Type":"Program","EndDate":"2026-11-13T20:00:00.0000000Z"}],"TotalRecordCount":4}"#;
+
+const GUARDED: &str = r#"{"Id":"4f53cda18c2baa0c0354bb5f9a3ecbe5","Policy":{"EnableLiveTvAccess":true,"IsDisabled":false,"EnableAllChannels":true,"MaxParentalRating":7,"BlockedTags":["Horror"],"BlockUnratedItems":["Movie"]}}"#;
+
+const ADULT: &str = r#"{"Id":"4f53cda18c2baa0c0354bb5f9a3ecbe5","Policy":{"EnableLiveTvAccess":true,"IsDisabled":false,"EnableAllChannels":true,"MaxParentalRating":9}}"#;
+
+const OFF_THE_LADDER: &str = r#"{"Id":"4f53cda18c2baa0c0354bb5f9a3ecbe5","Policy":{"EnableLiveTvAccess":true,"IsDisabled":false,"EnableAllChannels":true,"MaxParentalRating":0}}"#;
+
+const RATINGS: &str = "/Localization/ParentalRatings";
+
+const RATED: &str = r#"[{"Name":"TV-PG","Value":5},{"Name":"TV-14","Value":8}]"#;
 
 const LIVE_STREAM: &str = "a7f3a7f3a7f3a7f3a7f3a7f3a7f3a7f3_9d1c9d1c9d1c9d1c9d1c9d1c9d1c9d1c";
 
@@ -89,6 +105,7 @@ async fn live_tv_is_unsupported_where_emby_does_not_say_it_holds_emby_premiere()
         let fake = emby_answering(vec![(LICENCE, licence)]);
         let emby = reader(&fake);
         assert!(premiere(&emby.channels(MEMBER).await));
+        assert!(premiere(&emby.guide(MEMBER, 12).await));
         assert!(premiere(&emby.tune(MEMBER, CHANNEL).await));
         assert!(premiere(&emby.untune(&closes_by()).await));
         assert!(fake
@@ -155,7 +172,9 @@ async fn a_member_whose_own_account_may_not_watch_live_tv_is_answered_no_channel
         let emby = reader(&fake);
         assert_eq!(emby.channels(MEMBER).await.ok(), Some(Vec::new()));
         assert_eq!(emby.tune(MEMBER, CHANNEL).await.ok(), Some(None));
+        assert_eq!(emby.guide(MEMBER, 12).await.ok(), Some(Vec::new()));
         assert!(!asked_for(&fake, CHANNELS));
+        assert!(!asked_for(&fake, PROGRAMMES));
         assert!(!asked_for(&fake, OPENING));
     }
 }
@@ -401,4 +420,241 @@ async fn ids_of_another_shape_never_reach_a_path() {
         .requests()
         .iter()
         .all(|request| request.url.contains(SIGNING_IN) || request.url.contains(LICENCE)));
+}
+
+fn guided() -> Arc<Fake> {
+    guided_as(WATCHES, RATED)
+}
+
+fn guided_as(holder: &'static str, rated: &'static str) -> Arc<Fake> {
+    licensed(vec![
+        (HOLDER, Answer::reply(200, holder)),
+        (CHANNELS, Answer::reply(200, SHOWN)),
+        (PROGRAMMES, Answer::reply(200, SCHEDULED)),
+        (RATINGS, Answer::reply(200, rated)),
+    ])
+}
+
+fn instant(stamp: &str) -> Option<lemonfiber_ports::Instant> {
+    lemonfiber_ports::Instant::from_service_text(stamp)
+}
+
+fn aired(title: &str, certificate: Option<&str>, starts: &str, ends: &str) -> Option<Airing> {
+    Some(Airing {
+        title: title.to_owned(),
+        certificate: certificate.map(str::to_owned),
+        starts: lemonfiber_ports::Instant::from_service_text(starts)?,
+        ends: lemonfiber_ports::Instant::from_service_text(ends)?,
+    })
+}
+
+fn query(url: &str, name: &str) -> Option<String> {
+    url.split_once('?')?
+        .1
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .find(|(field, _)| *field == name)
+        .map(|(_, value)| value.replace("%3A", ":").replace("%2C", ","))
+}
+
+#[tokio::test]
+async fn each_channel_s_guide_holds_its_dated_programmes_in_the_order_they_air() {
+    let fake = guided();
+    let programmes: Vec<Airing> = [
+        aired(
+            "Morning Film",
+            Some("TV-14"),
+            "2026-11-13T17:00:00Z",
+            "2026-11-13T18:00:00Z",
+        ),
+        aired(
+            "Evening News",
+            None,
+            "2026-11-13T18:00:00Z",
+            "2026-11-13T19:00:00Z",
+        ),
+        aired(
+            "Fright Night",
+            Some("TV-PG"),
+            "2026-11-13T19:00:00Z",
+            "2026-11-13T20:30:00Z",
+        ),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    assert_eq!(programmes.len(), 3);
+    assert_eq!(
+        reader(&fake).guide(MEMBER, 12).await.ok(),
+        Some(vec![
+            Listing {
+                channel: CHANNEL.to_owned(),
+                programmes,
+                until: instant("2026-11-13T20:30:00Z"),
+            },
+            Listing {
+                channel: "13".to_owned(),
+                programmes: Vec::new(),
+                until: None,
+            },
+        ])
+    );
+    assert!(!asked_for(&fake, RATINGS));
+    assert!(fake
+        .requests()
+        .iter()
+        .any(|request| request.url.contains(CHANNELS)
+            && request.url.contains(&format!("UserId={MEMBER}"))));
+}
+
+#[tokio::test]
+async fn the_guide_is_read_across_the_hours_asked_from_now_once_whole_and_once_as_the_member_may_watch_it(
+) {
+    let fake = guided();
+    let before = lemonfiber_ports::Instant::of(std::time::SystemTime::now());
+    assert!(reader(&fake).guide(MEMBER, 30).await.is_ok());
+    let after = lemonfiber_ports::Instant::of(std::time::SystemTime::now());
+    let url = fake
+        .requests()
+        .into_iter()
+        .find(|request| request.url.contains(PROGRAMMES))
+        .map(|request| request.url)
+        .unwrap_or_default();
+    let read = |field: &str| {
+        query(&url, field)
+            .as_deref()
+            .and_then(lemonfiber_ports::Instant::from_service_text)
+    };
+    let from = read("MinEndDate");
+    assert!(
+        from.is_some_and(|from| before <= from && from <= after),
+        "the guide was not read from now: {url}"
+    );
+    assert_eq!(
+        read("MaxStartDate")
+            .zip(from)
+            .map(|(until, from)| until.since(from)),
+        Some(30 * lemonfiber_ports::instant::HOUR)
+    );
+    assert_eq!(query(&url, "ChannelIds").as_deref(), Some("12,13"));
+    assert!(
+        query(&url, "IsAiring").is_none(),
+        "the guide was read only for now: {url}"
+    );
+    let asked: Vec<String> = fake
+        .requests()
+        .into_iter()
+        .filter(|request| request.url.contains(PROGRAMMES))
+        .map(|request| request.url)
+        .collect();
+    assert_eq!(
+        asked
+            .iter()
+            .map(|url| query(url, "UserId"))
+            .collect::<Vec<_>>(),
+        vec![None, Some(MEMBER.to_owned())]
+    );
+    assert!(asked
+        .iter()
+        .all(|url| query(url, "Fields").as_deref() == Some("Tags")));
+}
+
+#[tokio::test]
+async fn a_programme_above_the_member_s_rating_carrying_a_blocked_tag_or_unrated_where_unrated_is_blocked_is_left_out_and_the_guide_still_ends_where_emby_s_does(
+) {
+    let fake = guided_as(GUARDED, RATED);
+    assert_eq!(
+        reader(&fake).guide(MEMBER, 12).await.ok(),
+        Some(vec![
+            Listing {
+                channel: CHANNEL.to_owned(),
+                programmes: Vec::new(),
+                until: instant("2026-11-13T20:30:00Z"),
+            },
+            Listing {
+                channel: "13".to_owned(),
+                programmes: Vec::new(),
+                until: None,
+            },
+        ])
+    );
+}
+
+#[tokio::test]
+async fn a_guide_whose_ratings_cannot_be_read_is_refused() {
+    let fake = guided_as(GUARDED, "<html>");
+    assert!(matches!(
+        reader(&fake).guide(MEMBER, 12).await,
+        Err(Failure::Refused { .. })
+    ));
+}
+
+#[tokio::test]
+async fn a_member_shown_no_channel_asks_no_guide() {
+    let fake = licensed(vec![
+        (HOLDER, Answer::reply(200, WATCHES)),
+        (CHANNELS, Answer::reply(200, r#"{"Items":[]}"#)),
+        (PROGRAMMES, Answer::reply(200, SCHEDULED)),
+    ]);
+    assert_eq!(reader(&fake).guide(MEMBER, 12).await.ok(), Some(Vec::new()));
+    assert!(!asked_for(&fake, PROGRAMMES));
+}
+
+#[tokio::test]
+async fn a_guide_asked_outside_its_hours_or_for_a_misshapen_member_is_refused_before_anything_is_read(
+) {
+    let fake = guided();
+    let emby = reader(&fake);
+    for hours in [0, 169] {
+        assert!(matches!(
+            emby.guide(MEMBER, hours).await,
+            Err(Failure::Refused { .. })
+        ));
+    }
+    assert!(matches!(
+        emby.guide("../Users", 12).await,
+        Err(Failure::Refused { .. })
+    ));
+    assert!(!asked_for(&fake, HOLDER) && !asked_for(&fake, PROGRAMMES));
+}
+
+#[tokio::test]
+async fn a_guide_emby_answers_unreadably_is_refused() {
+    let fake = licensed(vec![
+        (HOLDER, Answer::reply(200, WATCHES)),
+        (CHANNELS, Answer::reply(200, SHOWN)),
+        (PROGRAMMES, Answer::reply(200, "<html>")),
+    ]);
+    assert!(matches!(
+        reader(&fake).guide(MEMBER, 12).await,
+        Err(Failure::Refused { .. })
+    ));
+}
+
+fn titles(listings: Option<Vec<Listing>>) -> Option<Vec<String>> {
+    listings?.into_iter().next().map(|listing| {
+        listing
+            .programmes
+            .into_iter()
+            .map(|airing| airing.title)
+            .collect()
+    })
+}
+
+#[tokio::test]
+async fn under_an_age_limit_a_programme_whose_certificate_emby_s_ratings_do_not_name_is_left_out() {
+    let fake = guided_as(ADULT, r#"[{"Name":"TV-14","Value":8}]"#);
+    assert_eq!(
+        titles(reader(&fake).guide(MEMBER, 12).await.ok()),
+        Some(vec!["Morning Film".to_owned(), "Evening News".to_owned()])
+    );
+}
+
+#[tokio::test]
+async fn a_rating_limit_off_emby_s_ladder_still_limits_and_one_below_it_is_the_strictest() {
+    let fake = guided_as(OFF_THE_LADDER, RATED);
+    assert_eq!(
+        titles(reader(&fake).guide(MEMBER, 12).await.ok()),
+        Some(vec!["Evening News".to_owned()])
+    );
 }
