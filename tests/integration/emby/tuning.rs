@@ -426,10 +426,20 @@ fn guided() -> Arc<Fake> {
     guided_as(WATCHES, RATED)
 }
 
+/// Channel One with an unrated news bulletin on now.
+const SHOWN_NEWS: &str = r#"{"Items":[{"Id":"12","Name":"Channel One","Type":"TvChannel","ChannelNumber":"1","CurrentProgram":{"Id":"41","Name":"Evening News","OfficialRating":""}}],"TotalRecordCount":1}"#;
+
+/// Channel One with a cartoon rated TV-PG on now.
+const SHOWN_PG: &str = r#"{"Items":[{"Id":"12","Name":"Channel One","Type":"TvChannel","ChannelNumber":"1","CurrentProgram":{"Id":"44","Name":"Cartoons","OfficialRating":"TV-PG","Tags":["Cartoon"]}}],"TotalRecordCount":1}"#;
+
 fn guided_as(holder: &'static str, rated: &'static str) -> Arc<Fake> {
+    guided_on(holder, rated, SHOWN)
+}
+
+fn guided_on(holder: &'static str, rated: &'static str, shown: &'static str) -> Arc<Fake> {
     licensed(vec![
         (HOLDER, Answer::reply(200, holder)),
-        (CHANNELS, Answer::reply(200, SHOWN)),
+        (CHANNELS, Answer::reply(200, shown)),
         (PROGRAMMES, Answer::reply(200, SCHEDULED)),
         (RATINGS, Answer::reply(200, rated)),
     ])
@@ -560,23 +570,26 @@ async fn the_guide_is_read_across_the_hours_asked_from_now_once_whole_and_once_a
 }
 
 #[tokio::test]
-async fn a_programme_above_the_member_s_rating_carrying_a_blocked_tag_or_unrated_where_unrated_is_blocked_is_left_out_and_the_guide_still_ends_where_emby_s_does(
+async fn a_channel_whose_programme_on_now_the_member_s_policy_keeps_from_them_is_left_out_of_the_guide_channels_and_tune(
 ) {
     let fake = guided_as(GUARDED, RATED);
+    assert_eq!(reader(&fake).guide(MEMBER, 12).await.ok(), Some(Vec::new()));
+    assert_eq!(reader(&fake).channels(MEMBER).await.ok(), Some(Vec::new()));
+    assert_eq!(reader(&fake).tune(MEMBER, CHANNEL).await.ok(), Some(None));
+}
+
+#[tokio::test]
+async fn a_programme_kept_from_the_member_is_left_out_of_a_channel_they_may_watch_and_the_guide_still_ends_where_emby_s_does(
+) {
+    let fake = guided_on(OFF_THE_LADDER, RATED, SHOWN_NEWS);
     assert_eq!(
-        reader(&fake).guide(MEMBER, 12).await.ok(),
-        Some(vec![
-            Listing {
-                channel: CHANNEL.to_owned(),
-                programmes: Vec::new(),
-                until: instant("2026-11-13T20:30:00Z"),
-            },
-            Listing {
-                channel: "13".to_owned(),
-                programmes: Vec::new(),
-                until: None,
-            },
-        ])
+        reader(&fake)
+            .guide(MEMBER, 12)
+            .await
+            .ok()
+            .and_then(|listings| listings.into_iter().next())
+            .map(|listing| listing.until),
+        Some(instant("2026-11-13T20:30:00Z"))
     );
 }
 
@@ -652,9 +665,28 @@ async fn under_an_age_limit_a_programme_whose_certificate_emby_s_ratings_do_not_
 
 #[tokio::test]
 async fn a_rating_limit_off_emby_s_ladder_still_limits_and_one_below_it_is_the_strictest() {
-    let fake = guided_as(OFF_THE_LADDER, RATED);
+    let fake = guided_on(OFF_THE_LADDER, RATED, SHOWN_NEWS);
     assert_eq!(
         titles(reader(&fake).guide(MEMBER, 12).await.ok()),
         Some(vec!["Evening News".to_owned()])
     );
+}
+
+#[tokio::test]
+async fn on_a_channel_whose_programme_on_now_the_member_may_watch_a_later_programme_carrying_a_blocked_tag_is_left_out(
+) {
+    let fake = guided_on(GUARDED, RATED, SHOWN_PG);
+    let listing = reader(&fake)
+        .guide(MEMBER, 12)
+        .await
+        .ok()
+        .and_then(|listings| listings.into_iter().next());
+    assert_eq!(
+        listing.as_ref().map(|listing| listing.until),
+        Some(instant("2026-11-13T20:30:00Z"))
+    );
+    assert!(listing.is_some_and(|listing| listing
+        .programmes
+        .iter()
+        .all(|airing| airing.title != "Fright Night")));
 }
