@@ -113,6 +113,7 @@ fn declared() -> Declared {
             ),
             parameter: None,
             stream: HEX.to_owned(),
+            bound: Vec::new(),
         }],
         refused: vec![
             format!("{PREFIXED}/{BY_NAME}/[^/]+/Images(?:/|$)"),
