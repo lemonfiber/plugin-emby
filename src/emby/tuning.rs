@@ -137,10 +137,10 @@ impl Tuning for Emby {
     async fn channels(&self, member: &str) -> Result<Vec<Channel>, Failure> {
         licensed(self).await?;
         let member = Account::of(member).ok_or_else(|| self.misshapen("an account"))?;
-        if !watches_live_tv(self, member).await? {
+        let Some(access) = live_tv_access(self, member).await? else {
             return Ok(Vec::new());
-        }
-        listed(self, member, None).await
+        };
+        listed(self, member, None, &access).await
     }
 
     async fn guide(&self, member: &str, hours: u32) -> Result<Vec<Listing>, Failure> {
@@ -156,7 +156,7 @@ impl Tuning for Emby {
         let Some(access) = live_tv_access(self, member).await? else {
             return Ok(Vec::new());
         };
-        let channels = listed(self, member, None).await?;
+        let channels = listed(self, member, None, &access).await?;
         if channels.is_empty() {
             return Ok(Vec::new());
         }
@@ -199,11 +199,11 @@ impl Tuning for Emby {
         let Some(channel) = Item::of(channel) else {
             return Ok(None);
         };
-        if !watches_live_tv(self, member).await? {
+        let Some(access) = live_tv_access(self, member).await? else {
             return Ok(None);
-        }
+        };
         let wanted = channel.to_string();
-        if !listed(self, member, Some(channel))
+        if !listed(self, member, Some(channel), &access)
             .await?
             .iter()
             .any(|shown| shown.id == wanted)
@@ -235,10 +235,6 @@ async fn licensed(emby: &Emby) -> Result<(), Failure> {
     }
 }
 
-async fn watches_live_tv(emby: &Emby, member: Account<'_>) -> Result<bool, Failure> {
-    Ok(live_tv_access(emby, member).await?.is_some())
-}
-
 async fn live_tv_access(emby: &Emby, member: Account<'_>) -> Result<Option<Access>, Failure> {
     let response = emby
         .as_admin(Method::Get, &format!("/Users/{member}"), None)
@@ -258,6 +254,12 @@ async fn ages(emby: &Emby, access: &Access) -> Result<HashMap<String, u32>, Fail
         .into_iter()
         .map(|rating| (rating.name.to_lowercase(), rating.age))
         .collect())
+}
+
+/// Whether `access` keeps anything from the account: a parental rating, a blocked tag, or
+/// unrated items held back.
+fn restricted(access: &Access) -> bool {
+    access.level.is_some() || !access.blocked_tags.is_empty() || !access.unrated_blocked.is_empty()
 }
 
 fn admitted(programme: &ProgrammeResource, access: &Access, ages: &HashMap<String, u32>) -> bool {
@@ -281,16 +283,21 @@ fn admitted(programme: &ProgrammeResource, access: &Access, ages: &HashMap<Strin
     !blocked && !unrated_held && !too_old
 }
 
+/// The channels `member` may watch now, each with the programme on it: one whose programme
+/// on now `access` keeps from the account is left out, and where `access` keeps anything
+/// from it, so is one with nothing known to be on now.
 async fn listed(
     emby: &Emby,
     member: Account<'_>,
     only: Option<Item<'_>>,
+    access: &Access,
 ) -> Result<Vec<Channel>, Failure> {
     let member = member.to_string();
     let only = only.map(|channel| channel.to_string());
     let mut fields = vec![
         ("UserId", member.as_str()),
         ("AddCurrentProgram", "true"),
+        ("Fields", "Tags"),
         ("EnableImages", "false"),
         ("EnableUserData", "false"),
     ];
@@ -305,10 +312,17 @@ async fn listed(
         )
         .await?;
     let page: ChannelsResource = emby.endpoint.decode(&response, UNREAD_CHANNELS)?;
+    let ages = ages(emby, access).await?;
     Ok(page
         .items
         .into_iter()
         .filter(|channel| Item::of(&channel.id).is_some())
+        .filter(
+            |channel| match channel.now.as_ref().filter(|now| !now.title.is_empty()) {
+                Some(now) => admitted(now, access, &ages),
+                None => !restricted(access),
+            },
+        )
         .map(ChannelResource::channel)
         .collect())
 }
