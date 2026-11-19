@@ -18,11 +18,7 @@ pub const ADDRESS: &str = "http://emby:8096";
 /// The upstream this adapter fronts, as its project names itself.
 pub const UPSTREAM: &str = "Emby Server";
 
-/// The Emby Server release this adapter's recordings were taken from.
-pub const RELEASE: &str = "4.10.2.0";
-
-/// The digest of the image that release's recordings were taken from.
-pub const DIGEST: &str = "sha256:7082c63b10a2fcb3805a7eaebba407d5723bc57c085c9f0b29b7d0a702765cc1";
+include!(concat!(env!("OUT_DIR"), "/fronted.rs"));
 
 /// What this adapter says it is: the contracts it speaks and the release it supports.
 #[must_use]
