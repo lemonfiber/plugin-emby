@@ -29,11 +29,9 @@ Re-record whenever the adapter's answers or either digest change.
 `tests/conformance.rs` reads every recording with the core's own client, and
 `tests/manifest.rs` holds `plugin.toml` to the pinned core's own rules.
 
-`.github/reader/` is a byte-identical copy of plugin-template's harness. Change it
-there, then copy it here.
-
 ## The rules you cannot break
 
+- **No Python here.** The reader is spec's `first-party-plugin` workflow's.
 - **No `unwrap`, `expect`, `panic` or indexing** outside tests. The lints in
   `Cargo.toml` are the core's.
 - **Every value the core sends is held to its shape** (`src/shape.rs`) before it

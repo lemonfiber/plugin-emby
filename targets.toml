@@ -11,10 +11,10 @@
 #
 # It names a commit of lemonfiber's `main`, in full, rather than a release: what
 # the manifest declares — `speaks`, `fronts`, `native` and `replaces` — is on
-# `main` and in no release yet. `.github/reader/reader.py` refuses a commit
-# `main` does not hold, builds this one the way the release train builds the
-# build it is about to tag, keeps it in `.lemonfiber/`, and asks it about the
-# plugin, so every verdict CI reports is that build's own.
+# `main` and in no release yet. spec's `first-party-plugin` workflow refuses a
+# commit `main` does not hold, builds this one the way the release train builds
+# the build it is about to tag, and asks it about the plugin, so every verdict
+# CI reports is that build's own.
 #
 # The core crates in `Cargo.toml` are pinned at the same commit, so the adapter is
 # built against the core it is proved against, and `tests/targets.rs` fails where
