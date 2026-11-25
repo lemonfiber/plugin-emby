@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   plugin:
-    uses: lemonfiber/spec/.github/workflows/first-party-plugin.yml@179b4ba43358275e2595b4c35d7d9427f63cb3ea # v1.0.166
+    uses: lemonfiber/spec/.github/workflows/first-party-plugin.yml@45e04961cf70195b76ca705a0fa4ac3e2a0b167c # v1.0.168
 
   # Every recording, proof and conformance case alike, is what lemonfiber takes
   # again now. lemonfiber at the commit `targets.toml` names records this plugin
