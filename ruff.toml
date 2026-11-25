@@ -1,10 +1,9 @@
 # The Python lint floor for this organisation.
 #
-# Four repositories carry a `ruff.toml` — `spec`, `lemonfiber`,
-# `lemonfiber-media-stack` and `brand` — and every one of them holds the same
-# `select` and `ignore` lists, because the scripts they lint are the same kind
-# of thing: the gates a merge is held to. Four identical lists that nothing
-# compares are four lists that agree until the first one is edited.
+# Every repository with Python to lint carries a `ruff.toml`, and every one of
+# them holds the same `select` and `ignore` lists, because the scripts they lint
+# are the same kind of thing: the gates a merge is held to. Identical lists that
+# nothing compares agree only until the first one is edited.
 #
 # `check_shared_files.py` reads this one and holds each copy to it. Not byte for
 # byte: a repository's own file says what its scripts are and why, in a preamble
