@@ -20,4 +20,4 @@
 # built against the core it is proved against, and `tests/targets.rs` fails where
 # the two disagree.
 
-commit = "ec4b88684f89800a0b5be485ea3c8fedb5e64dce"
+commit = "cea723ebe8dbe1c4accd07be9b6a1bfb4a57122e"

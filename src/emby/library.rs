@@ -18,22 +18,24 @@ struct LibraryItem {
     name: String,
 }
 
-const fn held_types(kind: TitleKind) -> &'static str {
+const fn held_types(kind: TitleKind) -> Option<&'static str> {
     match kind {
-        TitleKind::Tv => item_type(Kind::Tv),
-        TitleKind::Movies => item_type(Kind::Movies),
-        TitleKind::Music => "MusicAlbum,MusicArtist",
-        TitleKind::Books => "Book,AudioBook",
+        TitleKind::Tv => Some(item_type(Kind::Tv)),
+        TitleKind::Movies => Some(item_type(Kind::Movies)),
+        TitleKind::Music => Some("MusicAlbum,MusicArtist"),
+        TitleKind::Books => Some("Book,AudioBook"),
+        TitleKind::Audiobooks => Some("AudioBook"),
+        TitleKind::Podcasts => None,
     }
 }
 
 #[async_trait]
 impl Library for Emby {
     async fn has_item(&self, kind: TitleKind, term: &str) -> Result<bool, Failure> {
-        let path = format!(
-            "/Items?Recursive=true&IncludeItemTypes={}",
-            held_types(kind)
-        );
+        let Some(types) = held_types(kind) else {
+            return Ok(false);
+        };
+        let path = format!("/Items?Recursive=true&IncludeItemTypes={types}");
         let response = self.as_admin(Method::Get, &path, None).await?;
         let page: ItemPage = self
             .endpoint

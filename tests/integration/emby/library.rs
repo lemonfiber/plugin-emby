@@ -66,6 +66,40 @@ async fn albums_are_looked_for_among_albums_and_artists_and_books_among_books_an
 }
 
 #[tokio::test]
+async fn an_audiobook_is_looked_for_among_audiobooks_alone() {
+    let fake = Fake::by_path(vec![
+        ("/Users/AuthenticateByName", Answer::reply(200, SIGNED_IN)),
+        (
+            "/Items",
+            Answer::reply(200, r#"{"Items":[{"Name":"Leviathan Wakes"}]}"#),
+        ),
+    ]);
+    assert_eq!(
+        reader(&fake)
+            .has_item(TitleKind::Audiobooks, "leviathan")
+            .await
+            .ok(),
+        Some(true)
+    );
+    assert!(asked(
+        &fake,
+        Method::Get,
+        "/Items?Recursive=true&IncludeItemTypes=AudioBook"
+    )
+    .is_some());
+}
+
+#[tokio::test]
+async fn a_podcast_is_answered_absent_without_asking() {
+    let fake = Fake::silent();
+    assert_eq!(
+        reader(&fake).has_item(TitleKind::Podcasts, "t").await.ok(),
+        Some(false)
+    );
+    assert!(fake.requests().is_empty());
+}
+
+#[tokio::test]
 async fn every_library_is_asked_to_look_again() {
     let fake = Fake::in_turn(vec![Answer::reply(200, SIGNED_IN), Answer::reply(204, "")]);
     assert!(reader(&fake).rescan().await.is_ok());
