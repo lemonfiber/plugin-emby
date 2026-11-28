@@ -24,8 +24,8 @@ forms       = ["library", "full"]
 id          = "emby"
 name        = "Emby"
 image       = "docker.io/emby/embyserver"
-digest      = "sha256:7082c63b10a2fcb3805a7eaebba407d5723bc57c085c9f0b29b7d0a702765cc1"
-tag         = "4.10.2.0"
+digest      = "sha256:cc19db1b53db4874143d4356bb5e1cdd6dac590f2818c02898d346dee3e460c7"
+tag         = "4.11.0.19"
 port        = 8097
 bind        = "loopback"
 health      = { kind = "http", path = "/System/Info/Public", timeout_s = 120 }
